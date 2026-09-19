@@ -31,7 +31,7 @@ jobs:
     - name: Get default environments
       id: envs
       run: |
-        echo "environments=$(pio project config --json-output | jq -cr '.[0][1][0][1]')" >> $GITHUB_OUTPUT
+        echo "environments=$(pio project config --json-output \vert{} jq -cr '.[0][1][0][1]')" >> $GITHUB_OUTPUT
     outputs:
       environments: ${{ steps.envs.outputs.environments }}
 
@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: ${{ fromJSON(needs.get_default_envs.outputs.environments) }}
+        environment: ["dino_lampe"]
     steps:
     - uses: actions/checkout@v4
     - name: Apply release config
