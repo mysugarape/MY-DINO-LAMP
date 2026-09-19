@@ -1,19 +1,11 @@
-#pragma once
+#ifndef USERMOD_DINO_KILLSWITCH_H
+#define USERMOD_DINO_KILLSWITCH_H
+
 #include "wled.h"
 
 /*
  * ============================================================
  *  Dino-Lampe – WLAN-Kill-Switch Usermod
- * ============================================================
- *  Haelt man die beiden unten definierten Taster gleichzeitig
- *  fuer DINO_HOLD_MS Millisekunden gedrueckt, wird das WLAN
- *  abgeschaltet. Die gleiche Kombination erneut gehalten
- *  startet den Wemos neu - WLED verbindet sich beim Boot
- *  dann ganz normal wieder mit dem gespeicherten WLAN.
- *
- *  Die Buttons bleiben parallel dazu ganz normal ueber die
- *  WLED-eigene Button-Konfiguration nutzbar - dieses Usermod
- *  liest die Pins nur zusaetzlich per digitalRead() mit.
  * ============================================================
  */
 
@@ -22,7 +14,7 @@
 #define DINO_BTN_PIN_2   14    // GPIO14 / D5  - Button "Dimmen"
 #define DINO_HOLD_MS     3000  // Haltezeit der Kombi in Millisekunden
 #define DINO_NUM_LEDS    12    // Anzahl LEDs im Ring, fuer das Blink-Feedback
-#define DINO_ONBOARD_LED LED_BUILTIN // GPIO2/D4, fest verbaute blaue Onboard-LED (aktiv LOW)
+#define DINO_ONBOARD_LED 2     // GPIO2 / D4 (Blaue Onboard-LED auf Wemos D1 Mini)
 // ===============================================================
 
 class UsermodDinoKillswitch : public Usermod {
@@ -45,8 +37,7 @@ class UsermodDinoKillswitch : public Usermod {
     void setup() override {
       updatePinModes();
 
-      // Onboard-LED auf dem Wemos D1 Mini ist aktiv LOW (LOW = an, HIGH = aus)
-      // Wichtig: GPIO2/D4 ist auch der Boot-Pin (TXD1). Nach dem Initialisieren dauerhaft deaktivieren.
+      // Onboard-LED deaktivieren (aktiv LOW)
       pinMode(DINO_ONBOARD_LED, OUTPUT);
       digitalWrite(DINO_ONBOARD_LED, HIGH);
 
@@ -56,11 +47,8 @@ class UsermodDinoKillswitch : public Usermod {
     void loop() override {
       if (!enabled) return;
 
-      // Sicherheitscheck: Verhindert Fehlausloesungen, wenn Taster/GND noch nicht verdrahtet sind oder auf -1 stehen
       if (btnPin1 < 0 || btnPin2 < 0) return;
 
-      // Die Pins verwenden INPUT_PULLUP. Ohne externe Beschaltung lesen sie HIGH.
-      // Erst wenn BEIDE Taster gleichzeitig gegen GND gezogen werden (LOW), zaehlt der Timer.
       bool bothPressed = (digitalRead(btnPin1) == LOW) && (digitalRead(btnPin2) == LOW);
 
       if (bothPressed) {
@@ -129,7 +117,6 @@ class UsermodDinoKillswitch : public Usermod {
       ok &= getJsonValue(top["btnPin2"], btnPin2, (int8_t)DINO_BTN_PIN_2);
       ok &= getJsonValue(top["holdMs"],  holdMs,  (uint16_t)DINO_HOLD_MS);
 
-      // Pins neu konfigurieren, falls sie ueber das WLED Web-Interface geaendert wurden
       if (ok) updatePinModes();
 
       return ok;
@@ -145,3 +132,5 @@ class UsermodDinoKillswitch : public Usermod {
 
 static UsermodDinoKillswitch dino_killswitch;
 REGISTER_USERMOD(dino_killswitch);
+
+#endif
