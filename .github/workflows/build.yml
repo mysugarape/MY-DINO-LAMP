@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: ["dino_lampe"]
+        environment: ["nodemcuv2"]
     steps:
     - uses: actions/checkout@v4
     - name: Apply release config
