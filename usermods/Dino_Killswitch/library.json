@@ -1,0 +1,5 @@
+{
+  "name": "Dino_Killswitch",
+  "build": { "libArchive": false },
+  "dependencies": {}
+}
