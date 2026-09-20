@@ -37,7 +37,7 @@ class UsermodDinoKillswitch : public Usermod {
     void setup() override {
       updatePinModes();
 
-      // Onboard-LED (GPIO2) als Ausgang definieren und ausschalten (aktiv LOW -> HIGH = aus)
+      // Onboard-LED (GPIO2) EINMALIG beim Start ausschalten (aktiv LOW -> HIGH = aus)
       pinMode(DINO_ONBOARD_LED, OUTPUT);
       digitalWrite(DINO_ONBOARD_LED, HIGH);
 
@@ -45,10 +45,6 @@ class UsermodDinoKillswitch : public Usermod {
     }
 
     void loop() override {
-      // Erzwingt in jedem Durchlauf, dass die blöde Onboard-LED AUS bleibt (HIGH = aus bei aktiv LOW)
-      pinMode(DINO_ONBOARD_LED, OUTPUT);
-      digitalWrite(DINO_ONBOARD_LED, HIGH);
-
       if (!enabled) return;
 
       if (btnPin1 < 0 || btnPin2 < 0) return;
@@ -72,7 +68,7 @@ class UsermodDinoKillswitch : public Usermod {
     void toggleWifi() {
       if (WiFi.getMode() != WIFI_OFF) {
         DEBUG_PRINTLN(F("[DinoKillswitch] WLAN wird deaktiviert"));
-        flashFeedback(0xFF0000); // Rot = WLAN geht aus
+        flashFeedback(0xFF0000);
         WiFi.disconnect(true);
         WiFi.mode(WIFI_OFF);
 #ifdef ESP8266
@@ -80,7 +76,7 @@ class UsermodDinoKillswitch : public Usermod {
 #endif
       } else {
         DEBUG_PRINTLN(F("[DinoKillswitch] WLAN wird reaktiviert (Neustart)"));
-        flashFeedback(0x00FF00); // Gruen = WLAN geht wieder an
+        flashFeedback(0x00FF00);
         delay(400);
         ESP.restart();
       }
