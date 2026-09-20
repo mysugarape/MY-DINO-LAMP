@@ -1,4 +1,4 @@
-name: Build Dino-Lampe Firmware
+name: Dino-Lampe Firmware Build
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Node.js einrichten (fuer Web-UI-Build)
+      - name: Node.js einrichten (für Web-UI-Build)
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -25,12 +25,12 @@ jobs:
       - name: PlatformIO installieren
         run: pip install platformio
 
-      - name: Firmware bauen
-        run: pio run -e dino_lampe
+      - name: Firmware bauen (nur unsere eigene Umgebung)
+        run: pio run -e nodemcuv2
 
       - name: Firmware als Download bereitstellen
         uses: actions/upload-artifact@v4
         with:
           name: dino-lampe-firmware
-          path: .pio/build/dino_lampe/firmware.bin
+          path: .pio/build/nodemcuv2/firmware.bin
           if-no-files-found: error
