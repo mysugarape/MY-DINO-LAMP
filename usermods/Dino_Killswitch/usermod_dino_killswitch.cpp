@@ -5,7 +5,12 @@
 
 /*
  * ============================================================
- *  Dino-Lampe – WLAN-Kill-Switch Usermod
+ *  Dino-Lampe – WLAN-Kill-Switch Usermod (Testversion ohne LED-Code)
+ * ============================================================
+ *  Nur noch die reine Taster-Logik: haelt man beide Taster
+ *  DINO_HOLD_MS lang gedrueckt, wird WLAN aus- bzw. wieder
+ *  eingeschaltet. Kein Zugriff mehr auf die Onboard-LED oder
+ *  den WS2812-Ring.
  * ============================================================
  */
 
@@ -13,8 +18,6 @@
 #define DINO_BTN_PIN_1   4     // GPIO4  / D2  - Button "An/Aus"
 #define DINO_BTN_PIN_2   14    // GPIO14 / D5  - Button "Dimmen"
 #define DINO_HOLD_MS     3000  // Haltezeit der Kombi in Millisekunden
-#define DINO_NUM_LEDS    12    // Anzahl LEDs im Ring, fuer das Blink-Feedback
-#define DINO_ONBOARD_LED 2     // GPIO2 / D4 (Blaue Onboard-LED auf Wemos D1 Mini)
 // ===============================================================
 
 class UsermodDinoKillswitch : public Usermod {
@@ -36,17 +39,11 @@ class UsermodDinoKillswitch : public Usermod {
   public:
     void setup() override {
       updatePinModes();
-
-      // Onboard-LED (GPIO2) EINMALIG beim Start ausschalten (aktiv LOW -> HIGH = aus)
-      pinMode(DINO_ONBOARD_LED, OUTPUT);
-      digitalWrite(DINO_ONBOARD_LED, HIGH);
-
       DEBUG_PRINTF_P(PSTR("[DinoKillswitch] setup: btnPin1=%d btnPin2=%d holdMs=%d\n"), btnPin1, btnPin2, holdMs);
     }
 
     void loop() override {
       if (!enabled) return;
-
       if (btnPin1 < 0 || btnPin2 < 0) return;
 
       bool bothPressed = (digitalRead(btnPin1) == LOW) && (digitalRead(btnPin2) == LOW);
@@ -68,7 +65,6 @@ class UsermodDinoKillswitch : public Usermod {
     void toggleWifi() {
       if (WiFi.getMode() != WIFI_OFF) {
         DEBUG_PRINTLN(F("[DinoKillswitch] WLAN wird deaktiviert"));
-        flashFeedback(0xFF0000);
         WiFi.disconnect(true);
         WiFi.mode(WIFI_OFF);
 #ifdef ESP8266
@@ -76,29 +72,9 @@ class UsermodDinoKillswitch : public Usermod {
 #endif
       } else {
         DEBUG_PRINTLN(F("[DinoKillswitch] WLAN wird reaktiviert (Neustart)"));
-        flashFeedback(0x00FF00);
         delay(400);
         ESP.restart();
       }
-    }
-
-    void flashFeedback(uint32_t color) {
-      uint16_t n = strip.getLengthTotal();
-      if (n > DINO_NUM_LEDS) n = DINO_NUM_LEDS;
-      uint32_t original[DINO_NUM_LEDS];
-      for (uint16_t i = 0; i < n; i++) original[i] = strip.getPixelColor(i);
-
-      for (uint8_t b = 0; b < 2; b++) {
-        for (uint16_t i = 0; i < n; i++) strip.setPixelColor(i, color);
-        strip.show();
-        delay(150);
-        for (uint16_t i = 0; i < n; i++) strip.setPixelColor(i, 0);
-        strip.show();
-        delay(150);
-      }
-
-      for (uint16_t i = 0; i < n; i++) strip.setPixelColor(i, original[i]);
-      strip.show();
     }
 
     void addToConfig(JsonObject& root) override {
