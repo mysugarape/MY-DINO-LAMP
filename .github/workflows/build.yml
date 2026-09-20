@@ -56,8 +56,7 @@ jobs:
         cache: 'npm'
     - run: |
         npm ci
-        VERSION=`date +%y%m%d0`
-        sed -i -r -e "s/define VERSION .+/define VERSION $VERSION/" wled00/wled.h
+        sed -i -r -e 's/define VERSION .+/define VERSION "0.16.1"/' wled00/wled.h
     - name: Cache PlatformIO
       uses: actions/cache@v4
       with:
