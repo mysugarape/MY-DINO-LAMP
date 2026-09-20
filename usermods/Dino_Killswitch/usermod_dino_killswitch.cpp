@@ -44,26 +44,29 @@ class UsermodDinoKillswitch : public Usermod {
       DEBUG_PRINTF_P(PSTR("[DinoKillswitch] setup: btnPin1=%d btnPin2=%d holdMs=%d\n"), btnPin1, btnPin2, holdMs);
     }
 
-    void loop() override {
-      if (!enabled) return;
+void loop() override {
+  // Onboard-LED (GPIO2) dauerhaft auf HIGH halten (aus)
+  digitalWrite(DINO_ONBOARD_LED, HIGH);
 
-      if (btnPin1 < 0 || btnPin2 < 0) return;
+  if (!enabled) return;
 
-      bool bothPressed = (digitalRead(btnPin1) == LOW) && (digitalRead(btnPin2) == LOW);
+  if (btnPin1 < 0 || btnPin2 < 0) return;
 
-      if (bothPressed) {
-        if (!comboActive) {
-          comboActive       = true;
-          comboStart        = millis();
-          triggeredThisHold = false;
-        } else if (!triggeredThisHold && millis() - comboStart >= holdMs) {
-          triggeredThisHold = true;
-          toggleWifi();
-        }
-      } else {
-        comboActive = false;
-      }
+  bool bothPressed = (digitalRead(btnPin1) == LOW) && (digitalRead(btnPin2) == LOW);
+
+  if (bothPressed) {
+    if (!comboActive) {
+      comboActive       = true;
+      comboStart        = millis();
+      triggeredThisHold = false;
+    } else if (!triggeredThisHold && millis() - comboStart >= holdMs) {
+      triggeredThisHold = true;
+      toggleWifi();
     }
+  } else {
+    comboActive = false;
+  }
+}
 
     void toggleWifi() {
       if (WiFi.getMode() != WIFI_OFF) {
