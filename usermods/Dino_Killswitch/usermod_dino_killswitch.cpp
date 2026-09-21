@@ -11,6 +11,11 @@
  *  das WLAN aus- bzw. wieder eingeschaltet. Der Ring blinkt
  *  dabei kurz zur Rueckmeldung (nicht-blockierend!).
  *
+ *  WICHTIG: Solange wifiKilled aktiv ist, wird bei JEDEM loop()
+ *  geprueft, ob WLED von sich aus wieder WiFi aktiviert hat
+ *  (das passiert automatisch ueber WLEDs eigene handleConnection()-
+ *  Reconnect-Logik) - und falls ja, sofort wieder abgeschaltet.
+ *
  *  WICHTIG - einmaliger manueller Schritt in der WLED-Oberflaeche:
  *  Config -> LED Preferences -> Button -> Button 0 (GPIO4/D2) auf
  *  Pin -1 (deaktiviert) stellen! Button 3/GPIO14 bleibt normal
@@ -38,11 +43,12 @@ class UsermodDinoKillswitch : public Usermod {
     bool          comboActive       = false;
     bool          triggeredThisHold = false;
 
-    // Einzel-Kurzdruck auf Pin1 (An/Aus)
+    // Haelt fest, ob das WLAN gerade per Kill-Switch deaktiviert sein SOLL
+    bool          wifiKilled        = false;
+
     bool          btn1WasPressed    = false;
     unsigned long btn1PressStart    = 0;
 
-    // Nicht-blockierendes Blink-Feedback ueber die Segment-API
     bool          flashActive       = false;
     bool          flashOn           = false;
     uint8_t       flashPhasesLeft   = 0;
@@ -51,14 +57,20 @@ class UsermodDinoKillswitch : public Usermod {
     uint8_t       savedMode         = FX_MODE_STATIC;
     uint32_t      savedColor        = 0;
 
-    // Verzoegerter, nicht-blockierender Neustart (damit das gruene Blinken
-    // noch sichtbar ist, bevor der ESP neu startet)
     bool          pendingRestart    = false;
     unsigned long restartAt         = 0;
 
     void updatePinModes() {
       if (btnPin1 >= 0) pinMode(btnPin1, INPUT_PULLUP);
       if (btnPin2 >= 0) pinMode(btnPin2, INPUT_PULLUP);
+    }
+
+    void enforceWifiOff() {
+      WiFi.disconnect(true);
+      WiFi.mode(WIFI_OFF);
+#ifdef ESP8266
+      WiFi.forceSleepBegin();
+#endif
     }
 
     void startFlash(uint32_t color) {
@@ -68,13 +80,11 @@ class UsermodDinoKillswitch : public Usermod {
 
       flashColor      = color;
       flashPhasesLeft = DINO_FLASH_COUNT;
-      flashOn         = false; // wird in handleFlash() sofort auf true gedreht
+      flashOn         = false;
       flashActive     = true;
-      flashNextPhase  = millis(); // sofort starten
+      flashNextPhase  = millis();
     }
 
-    // Nicht-blockierend: wird jeden loop()-Durchlauf aufgerufen, aendert nur
-    // dann etwas, wenn die aktuelle Phase abgelaufen ist. Kein delay()!
     void handleFlash() {
       if (!flashActive) return;
       if (millis() < flashNextPhase) return;
@@ -82,7 +92,6 @@ class UsermodDinoKillswitch : public Usermod {
       Segment &seg = strip.getMainSegment();
 
       if (flashPhasesLeft == 0) {
-        // fertig: alten Zustand wiederherstellen
         seg.setMode(savedMode);
         seg.setColor(0, savedColor);
         flashActive = false;
@@ -104,9 +113,14 @@ class UsermodDinoKillswitch : public Usermod {
     }
 
     void loop() override {
-      handleFlash(); // immer zuerst pruefen, unabhaengig von "enabled"
+      // Staendig durchsetzen: solange WLAN per Kill-Switch aus sein soll,
+      // WLEDs eigene automatische Reconnect-Versuche sofort zunichtemachen.
+      if (wifiKilled && WiFi.getMode() != WIFI_OFF) {
+        enforceWifiOff();
+      }
 
-      // Verzoegerten Neustart abarbeiten (nicht-blockierend)
+      handleFlash();
+
       if (pendingRestart && millis() >= restartAt) {
         pendingRestart = false;
         ESP.restart();
@@ -120,7 +134,6 @@ class UsermodDinoKillswitch : public Usermod {
       bool pin2Pressed = (digitalRead(btnPin2) == LOW);
       bool bothPressed = pin1Pressed && pin2Pressed;
 
-      // --- Kombi-Erkennung fuer den WLAN-Kill-Switch ---
       if (bothPressed) {
         if (!comboActive) {
           comboActive       = true;
@@ -134,7 +147,6 @@ class UsermodDinoKillswitch : public Usermod {
         comboActive = false;
       }
 
-      // --- Einzel-Kurzdruck auf Pin1 = An/Aus (ersetzt WLEDs eigenes Button 0) ---
       if (pin1Pressed) {
         if (!btn1WasPressed) {
           btn1WasPressed = true;
@@ -153,18 +165,15 @@ class UsermodDinoKillswitch : public Usermod {
     }
 
     void toggleWifi() {
-      if (WiFi.getMode() != WIFI_OFF) {
+      if (!wifiKilled) {
         DEBUG_PRINTLN(F("[DinoKillswitch] WLAN wird deaktiviert"));
+        wifiKilled = true;
         startFlash(0xFF0000); // rot = WLAN geht aus
-        WiFi.disconnect(true);
-        WiFi.mode(WIFI_OFF);
-#ifdef ESP8266
-        WiFi.forceSleepBegin();
-#endif
+        enforceWifiOff();
       } else {
         DEBUG_PRINTLN(F("[DinoKillswitch] WLAN wird reaktiviert (Neustart)"));
+        wifiKilled = false;
         startFlash(0x00FF00); // gruen = WLAN geht wieder an
-        // Neustart erst nach dem Blinken ausloesen, nicht-blockierend
         pendingRestart = true;
         restartAt = millis() + (DINO_FLASH_COUNT * DINO_FLASH_PHASE_MS) + 200;
       }
@@ -195,7 +204,7 @@ class UsermodDinoKillswitch : public Usermod {
       JsonObject user = root["u"];
       if (user.isNull()) user = root.createNestedObject("u");
       JsonArray infoArr = user.createNestedArray("WLAN Killswitch");
-      infoArr.add(enabled ? "aktiv" : "deaktiviert");
+      infoArr.add(enabled ? (wifiKilled ? "WLAN AUS" : "WLAN AN") : "deaktiviert");
     }
 };
 
