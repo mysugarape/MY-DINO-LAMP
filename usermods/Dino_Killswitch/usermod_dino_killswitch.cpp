@@ -65,7 +65,7 @@ class UsermodDinoKillswitch : public Usermod {
     void toggleWifi() {
       if (WiFi.getMode() != WIFI_OFF) {
         DEBUG_PRINTLN(F("[DinoKillswitch] WLAN wird deaktiviert"));
-        WiFi.disconnect(true);
+        WiFi.disconnect();
         WiFi.mode(WIFI_OFF);
 #ifdef ESP8266
         WiFi.forceSleepBegin();
