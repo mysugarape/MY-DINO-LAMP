@@ -63,20 +63,25 @@ class UsermodDinoKillswitch : public Usermod {
     }
 
     void toggleWifi() {
-      // Pruefen, ob WLAN aktuell aktiv ist
-      bool wifiIsActive = (WiFi.getMode() != WIFI_OFF) && !noWifi;
+      bool wifiIsActive = (WiFi.getMode() != WIFI_OFF);
 
       if (wifiIsActive) {
-        DEBUG_PRINTLN(F("[DinoKillswitch] WLAN wird deaktiviert -> Neustart"));
-        noWifi = true; // WLED mitteilen, dass WLAN aus bleiben soll
-        WLED::instance().getWiFiManager().stopConfigPortal(); // AP sauber stoppen
-        delay(200);
+        DEBUG_PRINTLN(F("[DinoKillswitch] WLAN wird deaktiviert -> Reboot"));
+        WiFi.disconnect(false); // Zugangsdaten NICHT loeschen
+        WiFi.mode(WIFI_OFF);
+#ifdef ESP8266
+        WiFi.forceSleepBegin();
+#endif
+        delay(300);
         ESP.restart(); // Reboot in den Offline-Modus
       } else {
-        DEBUG_PRINTLN(F("[DinoKillswitch] WLAN wird reaktiviert -> Neustart"));
-        noWifi = false; // WLAN wieder freigeben
-        delay(200);
-        ESP.restart(); // Reboot in den Online-Modus
+        DEBUG_PRINTLN(F("[DinoKillswitch] WLAN wird reaktiviert -> Reboot"));
+#ifdef ESP8266
+        WiFi.forceSleepWake();
+#endif
+        WiFi.mode(WIFI_STA);
+        delay(300);
+        ESP.restart(); // Reboot in den Normalbetrieb
       }
     }
 
