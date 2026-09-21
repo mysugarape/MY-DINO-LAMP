@@ -5,19 +5,29 @@
 
 /*
  * ============================================================
- *  Dino-Lampe – WLAN-Kill-Switch Usermod (Testversion ohne LED-Code)
+ *  Dino-Lampe – WLAN-Kill-Switch Usermod
  * ============================================================
- *  Nur noch die reine Taster-Logik: haelt man beide Taster
- *  DINO_HOLD_MS lang gedrueckt, wird WLAN aus- bzw. wieder
- *  eingeschaltet. Kein Zugriff mehr auf die Onboard-LED oder
- *  den WS2812-Ring.
+ *  Haelt man beide Taster DINO_HOLD_MS lang gedrueckt, wird
+ *  das WLAN aus- bzw. wieder eingeschaltet.
+ *
+ *  WICHTIG - einmaliger manueller Schritt in der WLED-Oberflaeche:
+ *  Config -> LED Preferences -> Button -> Button 0 (GPIO4/D2) auf
+ *  Pin -1 (deaktiviert) stellen! Sonst kollidiert WLEDs eigene
+ *  "5 Sekunden halten = AP neu oeffnen"-Logik auf Button 0 mit
+ *  unserer Kombi. Button 3/GPIO14 bleibt normal in WLED konfiguriert,
+ *  die hat dieses Sonderverhalten nicht.
+ *
+ *  Dieses Usermod uebernimmt den Kurzdruck-An/Aus fuer GPIO4 selbst
+ *  (repliziert WLEDs eigene shortPressAction fuer Button 0), damit
+ *  die Taste trotzdem normal funktioniert.
  * ============================================================
  */
 
 // ======================= EINSTELLUNGEN ========================
-#define DINO_BTN_PIN_1   4     // GPIO4  / D2  - Button "An/Aus"
-#define DINO_BTN_PIN_2   14    // GPIO14 / D5  - Button "Dimmen"
-#define DINO_HOLD_MS     3000  // Haltezeit der Kombi in Millisekunden
+#define DINO_BTN_PIN_1        4     // GPIO4  / D2  - Button "An/Aus" (WLED-Button 0 hier deaktiviert)
+#define DINO_BTN_PIN_2        14    // GPIO14 / D5  - Button "Dimmen" (bleibt normal in WLED konfiguriert)
+#define DINO_HOLD_MS          3000  // Haltezeit der Kombi in Millisekunden
+#define DINO_SHORT_PRESS_MS   600   // max. Dauer fuer Einzel-Kurzdruck auf Pin1 (An/Aus)
 // ===============================================================
 
 class UsermodDinoKillswitch : public Usermod {
@@ -30,6 +40,10 @@ class UsermodDinoKillswitch : public Usermod {
     unsigned long comboStart        = 0;
     bool          comboActive       = false;
     bool          triggeredThisHold = false;
+
+    // Fuer den selbst uebernommenen Kurzdruck auf Pin1 (An/Aus)
+    bool          btn1WasPressed    = false;
+    unsigned long btn1PressStart    = 0;
 
     void updatePinModes() {
       if (btnPin1 >= 0) pinMode(btnPin1, INPUT_PULLUP);
@@ -46,8 +60,11 @@ class UsermodDinoKillswitch : public Usermod {
       if (!enabled) return;
       if (btnPin1 < 0 || btnPin2 < 0) return;
 
-      bool bothPressed = (digitalRead(btnPin1) == LOW) && (digitalRead(btnPin2) == LOW);
+      bool pin1Pressed = (digitalRead(btnPin1) == LOW);
+      bool pin2Pressed = (digitalRead(btnPin2) == LOW);
+      bool bothPressed = pin1Pressed && pin2Pressed;
 
+      // --- Kombi-Erkennung fuer den WLAN-Kill-Switch ---
       if (bothPressed) {
         if (!comboActive) {
           comboActive       = true;
@@ -60,28 +77,38 @@ class UsermodDinoKillswitch : public Usermod {
       } else {
         comboActive = false;
       }
+
+      // --- Einzel-Kurzdruck auf Pin1 = An/Aus (ersetzt WLEDs eigenes Button 0) ---
+      if (pin1Pressed) {
+        if (!btn1WasPressed) {
+          btn1WasPressed = true;
+          btn1PressStart = millis();
+        }
+      } else {
+        if (btn1WasPressed) {
+          unsigned long dur = millis() - btn1PressStart;
+          btn1WasPressed = false;
+          // Nur toggeln, wenn es ein kurzer Einzeldruck war (kein Teil der WLAN-Kombi)
+          if (!triggeredThisHold && dur >= 50 && dur < DINO_SHORT_PRESS_MS) {
+            toggleOnOff();
+            stateUpdated(CALL_MODE_BUTTON);
+          }
+        }
+      }
     }
 
     void toggleWifi() {
-      bool wifiIsActive = (WiFi.getMode() != WIFI_OFF);
-
-      if (wifiIsActive) {
-        DEBUG_PRINTLN(F("[DinoKillswitch] WLAN wird deaktiviert -> Reboot"));
-        WiFi.disconnect(false); // Zugangsdaten NICHT loeschen
+      if (WiFi.getMode() != WIFI_OFF) {
+        DEBUG_PRINTLN(F("[DinoKillswitch] WLAN wird deaktiviert"));
+        WiFi.disconnect(true);
         WiFi.mode(WIFI_OFF);
 #ifdef ESP8266
         WiFi.forceSleepBegin();
 #endif
-        delay(300);
-        ESP.restart(); // Reboot in den Offline-Modus
       } else {
-        DEBUG_PRINTLN(F("[DinoKillswitch] WLAN wird reaktiviert -> Reboot"));
-#ifdef ESP8266
-        WiFi.forceSleepWake();
-#endif
-        WiFi.mode(WIFI_STA);
-        delay(300);
-        ESP.restart(); // Reboot in den Normalbetrieb
+        DEBUG_PRINTLN(F("[DinoKillswitch] WLAN wird reaktiviert (Neustart)"));
+        delay(400);
+        ESP.restart();
       }
     }
 
